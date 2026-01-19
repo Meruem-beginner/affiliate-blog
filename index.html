@@ -1,0 +1,108 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>3D Earth on GitHub Pages</title>
+    <style>
+        body { margin: 0; background-color: #000; overflow: hidden; touch-action: none; }
+        canvas { display: block; }
+    </style>
+</head>
+<body>
+
+    <script type="importmap">
+        {
+            "imports": {
+                "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+                "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
+            }
+        }
+    </script>
+
+    <script type="module">
+        import * as THREE from 'three';
+        import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+
+        const scene = new THREE.Scene();
+        const camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 1000);
+        const renderer = new THREE.WebGLRenderer({ antialias: true });
+        renderer.setPixelRatio(window.devicePixelRatio);
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        document.body.appendChild(renderer.domElement);
+
+        // --- 1. 背景（星空）の作成 ---
+        const starGeometry = new THREE.BufferGeometry();
+        const starMaterial = new THREE.PointsMaterial({ color: 0xffffff, size: 0.7, sizeAttenuation: true });
+        const starVertices = [];
+        for (let i = 0; i < 3000; i++) {
+            const x = (Math.random() - 0.5) * 1000;
+            const y = (Math.random() - 0.5) * 1000;
+            const z = (Math.random() - 0.5) * 1000;
+            starVertices.push(x, y, z);
+        }
+        starGeometry.setAttribute('position', new THREE.Float32BufferAttribute(starVertices, 3));
+        const stars = new THREE.Points(starGeometry, starMaterial);
+        scene.add(stars);
+
+        // --- 2. 地球の作成 ---
+        const radius = 2;
+        const geometry = new THREE.SphereGeometry(radius, 64, 64);
+        
+        const textureLoader = new THREE.TextureLoader();
+        // GitHub Pagesでも読み込みやすいURL
+        const earthTexture = textureLoader.load('https://raw.githubusercontent.com/mrdoob/three.js/master/examples/textures/planets/earth_atmos_2048.jpg');
+        const earthMaterial = new THREE.MeshPhongMaterial({
+            map: earthTexture,
+            shininess: 10
+        });
+        const earth = new THREE.Mesh(geometry, earthMaterial);
+        scene.add(earth);
+
+        // --- 3. 大気（グロー効果）の追加 ---
+        // 地球の周りに少し大きい半透明の球体を重ねて光らせる
+        const atmosphereGeometry = new THREE.SphereGeometry(radius * 1.02, 64, 64);
+        const atmosphereMaterial = new THREE.MeshBasicMaterial({
+            color: 0x4488ff,
+            transparent: true,
+            opacity: 0.2,
+            side: THREE.BackSide // 内側を向ける
+        });
+        const atmosphere = new THREE.Mesh(atmosphereGeometry, atmosphereMaterial);
+        scene.add(atmosphere);
+
+        // --- 4. 光源設定 ---
+        const ambientLight = new THREE.AmbientLight(0xffffff, 0.5); // 全体を少し明るく
+        scene.add(ambientLight);
+        const sunLight = new THREE.DirectionalLight(0xffffff, 2.5); // メインの光
+        sunLight.position.set(5, 3, 5);
+        scene.add(sunLight);
+
+        // --- 5. コントロールと制限 ---
+        const controls = new OrbitControls(camera, renderer.domElement);
+        controls.enableDamping = true;
+        
+        // ズーム制限（ピンチアウトで離れすぎないように）
+        controls.minDistance = 3.5; // 最接近
+        controls.maxDistance = 10.0; // 最大引き
+        controls.enablePan = false; // 画面の並行移動を禁止
+
+        camera.position.z = 7;
+
+        function animate() {
+            requestAnimationFrame(animate);
+            earth.rotation.y += 0.0015; // ゆっくり自転
+            controls.update();
+            renderer.render(scene, camera);
+        }
+
+        window.addEventListener('resize', () => {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        });
+
+        animate();
+    </script>
+</body>
+</html>
