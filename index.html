@@ -2,37 +2,20 @@
 <html lang="ja">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-    <title>Interactive Solar System & Earth</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Solar System Mobile Optimized</title>
     <style>
-        body { margin: 0; background-color: #000; overflow: hidden; font-family: 'Segoe UI', sans-serif; touch-action: none; color: white; }
+        body { margin: 0; background-color: #000; overflow: hidden; font-family: sans-serif; touch-action: none; color: white; }
         canvas { display: block; }
         #ui-layer {
-            position: absolute;
-            top: 20px;
-            left: 50%;
-            transform: translateX(-50%);
-            text-align: center;
-            pointer-events: none;
-            transition: opacity 0.5s;
+            position: absolute; top: 20px; width: 100%; text-align: center; pointer-events: none; transition: opacity 0.5s;
         }
-        #ui-layer h1 {
-            font-size: 32px;
-            margin: 0;
-            letter-spacing: 4px;
-            text-shadow: 0 0 20px rgba(255,200,100,0.8);
-        }
+        #ui-layer h1 { font-size: 24px; margin: 0; letter-spacing: 2px; text-shadow: 0 0 10px rgba(255,200,100,0.8); }
         .back-btn {
-            position: absolute;
-            top: 20px;
-            left: 20px;
-            padding: 10px 20px;
-            background: rgba(255,255,255,0.2);
-            border: 1px solid white;
-            color: white;
-            cursor: pointer;
-            display: none; /* 初期は非表示 */
-            backdrop-filter: blur(5px);
+            position: absolute; bottom: 30px; left: 50%; transform: translateX(-50%);
+            padding: 12px 24px; background: rgba(255,255,255,0.2); border: 2px solid white;
+            color: white; border-radius: 30px; cursor: pointer; display: none; backdrop-filter: blur(5px);
+            font-weight: bold; z-index: 10; pointer-events: auto;
         }
     </style>
 </head>
@@ -40,7 +23,7 @@
 
 <div id="ui-layer">
     <h1 id="title">SOLAR SYSTEM</h1>
-    <p id="desc" style="font-size: 14px; opacity: 0.8;">地球をクリックすると詳細を表示します</p>
+    <p style="font-size: 12px; opacity: 0.8;">地球をタップしてズームイン</p>
 </div>
 <button class="back-btn" id="backBtn">太陽系へ戻る</button>
 
@@ -57,101 +40,71 @@
     import * as THREE from 'three';
     import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 
-    // --- 基本設定 ---
     const scene = new THREE.Scene();
     const camera = new THREE.PerspectiveCamera(50, window.innerWidth / window.innerHeight, 0.1, 5000);
     const renderer = new THREE.WebGLRenderer({ antialias: true });
     renderer.setSize(window.innerWidth, window.innerHeight);
-    renderer.setPixelRatio(window.devicePixelRatio);
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2)); // パフォーマンス最適化
     document.body.appendChild(renderer.domElement);
 
     const textureLoader = new THREE.TextureLoader();
-    let currentMode = 'SYSTEM'; // 'SYSTEM' or 'EARTH'
+    let currentMode = 'SYSTEM';
     let isTransitioning = false;
 
-    // --- 1. 共通の背景（星空） ---
-    const starGeometry = new THREE.BufferGeometry();
-    const starMaterial = new THREE.PointsMaterial({ color: 0xffffff, size: 0.7, sizeAttenuation: true });
+    // --- 背景（星空） ---
     const starVertices = [];
-    for (let i = 0; i < 5000; i++) {
+    for (let i = 0; i < 3000; i++) {
         starVertices.push((Math.random() - 0.5) * 2000, (Math.random() - 0.5) * 2000, (Math.random() - 0.5) * 2000);
     }
-    starGeometry.setAttribute('position', new THREE.Float32BufferAttribute(starVertices, 3));
-    scene.add(new THREE.Points(starGeometry, starMaterial));
+    const starGeo = new THREE.BufferGeometry();
+    starGeo.setAttribute('position', new THREE.Float32BufferAttribute(starVertices, 3));
+    scene.add(new THREE.Points(starGeo, new THREE.PointsMaterial({ color: 0xffffff, size: 0.7 })));
 
-    // --- 2. 太陽系モードの構築 ---
+    // --- 太陽系グループ ---
     const systemGroup = new THREE.Group();
     scene.add(systemGroup);
+    systemGroup.add(new THREE.PointLight(0xffffff, 8000, 2000));
+    scene.add(new THREE.AmbientLight(0xffffff, 0.6));
 
-    const sunLight = new THREE.PointLight(0xffffff, 5000, 2000);
-    systemGroup.add(sunLight);
-    const ambientLight = new THREE.AmbientLight(0xffffff, 0.5);
-    scene.add(ambientLight);
-
-    const sunGeo = new THREE.SphereGeometry(35, 64, 64);
-    const sunMat = new THREE.MeshStandardMaterial({ 
-        emissive: 0xff6600, emissiveIntensity: 2, 
-        map: textureLoader.load('https://threejs.org/examples/textures/lava/lavatile.jpg') 
-    });
-    const sun = new THREE.Mesh(sunGeo, sunMat);
+    const sun = new THREE.Mesh(
+        new THREE.SphereGeometry(35, 32, 32),
+        new THREE.MeshStandardMaterial({ emissive: 0xff4400, emissiveIntensity: 2, map: textureLoader.load('https://threejs.org/examples/textures/lava/lavatile.jpg') })
+    );
     systemGroup.add(sun);
 
     const planetConfigs = [
-        { name: "水星", dist: 70,  size: 5,  speed: 0.24, tex: 'mercurymap.jpg', color: 0xaaaaaa },
-        { name: "金星", dist: 110, size: 9,  speed: 0.61, tex: 'venusmap.jpg',   color: 0xe3bb76 },
-        { name: "地球", dist: 160, size: 10, speed: 1.0,  tex: 'earth_atmos_2048.jpg', color: 0x2271b3 },
-        { name: "火星", dist: 210, size: 7,  speed: 1.88, tex: 'mars_1k_color.jpg', color: 0xe27b58 },
-        { name: "木星", dist: 310, size: 22, speed: 11.86, tex: 'jupitermap.jpg', color: 0xd39c7e },
-        { name: "土星", dist: 420, size: 18, speed: 29.46, tex: 'saturnmap.jpg', color: 0xc5ab6e, hasRing: true },
-        { name: "天王星", dist: 510, size: 13, speed: 84.0, tex: 'uranusmap.jpg', color: 0xbbe1e4 },
-        { name: "海王星", dist: 590, size: 12, speed: 164.8, tex: 'neptunemap.jpg', color: 0x6081ff }
+        { name: "地球", dist: 160, size: 12, speed: 1.0, tex: 'earth_atmos_2048.jpg', color: 0x2271b3 },
+        { name: "火星", dist: 230, size: 8, speed: 1.88, tex: 'mars_1k_color.jpg', color: 0xe27b58 }
+        // ※軽量化のため主要なもののみ。適宜追加してください。
     ];
 
     const planets = [];
-    const tBase = "https://threejs.org/examples/textures/planets/";
-
     planetConfigs.forEach(data => {
         const group = new THREE.Group();
-        const mat = new THREE.MeshStandardMaterial({
-            map: textureLoader.load(tBase + data.tex, undefined, undefined, () => mat.color.set(data.color)),
-            roughness: 0.5, metalness: 0.2
-        });
-        const mesh = new THREE.Mesh(new THREE.SphereGeometry(data.size, 64, 64), mat);
+        const mesh = new THREE.Mesh(
+            new THREE.SphereGeometry(data.size, 32, 32),
+            new THREE.MeshStandardMaterial({ map: textureLoader.load("https://threejs.org/examples/textures/planets/" + data.tex) })
+        );
         mesh.position.x = data.dist;
-        mesh.userData = { name: data.name, dist: data.dist, speed: data.speed };
-
-        if (data.hasRing) {
-            const ring = new THREE.Mesh(new THREE.RingGeometry(data.size * 1.3, data.size * 2.2, 64), 
-                new THREE.MeshStandardMaterial({ color: 0x999999, side: THREE.DoubleSide, transparent: true, opacity: 0.6 }));
-            ring.rotation.x = Math.PI / 2.2;
-            mesh.add(ring);
-        }
+        mesh.userData = { name: data.name };
         group.add(mesh);
         systemGroup.add(group);
         planets.push({ mesh, group, data });
-
-        const orbit = new THREE.Mesh(new THREE.RingGeometry(data.dist - 0.5, data.dist + 0.5, 128),
-            new THREE.MeshBasicMaterial({ color: 0x444466, transparent: true, opacity: 0.3, side: THREE.DoubleSide }));
-        orbit.rotation.x = Math.PI / 2;
-        systemGroup.add(orbit);
     });
 
-    // --- 3. 詳細地球モードの構築 (初期は非表示) ---
+    // --- 地球詳細グループ ---
     const earthDetailGroup = new THREE.Group();
     earthDetailGroup.visible = false;
     scene.add(earthDetailGroup);
 
-    const detailEarthRadius = 2;
-    const detailEarthGeo = new THREE.SphereGeometry(detailEarthRadius, 64, 64);
-    const detailEarthMat = new THREE.MeshPhongMaterial({
-        map: textureLoader.load('https://raw.githubusercontent.com/mrdoob/three.js/master/examples/textures/planets/earth_atmos_2048.jpg'),
-        shininess: 10
-    });
-    const detailEarth = new THREE.Mesh(detailEarthGeo, detailEarthMat);
+    const detailEarth = new THREE.Mesh(
+        new THREE.SphereGeometry(2, 64, 64),
+        new THREE.MeshPhongMaterial({ map: textureLoader.load('https://raw.githubusercontent.com/mrdoob/three.js/master/examples/textures/planets/earth_atmos_2048.jpg'), shininess: 10 })
+    );
     earthDetailGroup.add(detailEarth);
-
+    
     const atmosphere = new THREE.Mesh(
-        new THREE.SphereGeometry(detailEarthRadius * 1.02, 64, 64),
+        new THREE.SphereGeometry(2.05, 64, 64),
         new THREE.MeshBasicMaterial({ color: 0x4488ff, transparent: true, opacity: 0.2, side: THREE.BackSide })
     );
     earthDetailGroup.add(atmosphere);
@@ -160,52 +113,70 @@
     detailLight.position.set(5, 3, 5);
     earthDetailGroup.add(detailLight);
 
-    // --- コントロール ---
+    // --- 操作設定 ---
     const controls = new OrbitControls(camera, renderer.domElement);
     controls.enableDamping = true;
-    camera.position.set(0, 500, 1000);
+    camera.position.set(0, 400, 600);
 
-    // --- インタラクション ---
-    let virtualTime = 0;
-    let isDragging = false;
+    // --- モバイル対応タップ判定ロジック ---
+    let touchStartTime = 0;
     const raycaster = new THREE.Raycaster();
     const mouse = new THREE.Vector2();
 
-    // モード切替: 地球詳細へ
+    function checkHit(x, y) {
+        mouse.x = (x / window.innerWidth) * 2 - 1;
+        mouse.y = -(y / window.innerHeight) * 2 + 1;
+        raycaster.setFromCamera(mouse, camera);
+        const intersects = raycaster.intersectObjects(planets.map(p => p.mesh));
+        if (intersects.length > 0 && intersects[0].object.userData.name === "地球") {
+            switchToEarth(intersects[0].object);
+        }
+    }
+
+    // pointerdown と pointerup の時間差で「タップ」か「ドラッグ」かを判別
+    renderer.domElement.addEventListener('pointerdown', (e) => {
+        touchStartTime = performance.now();
+    });
+
+    renderer.domElement.addEventListener('pointerup', (e) => {
+        const touchDuration = performance.now() - touchStartTime;
+        // 200ms未満の短い接触を「タップ」とみなす
+        if (touchDuration < 200 && !isTransitioning && currentMode === 'SYSTEM') {
+            checkHit(e.clientX, e.clientY);
+        }
+    });
+
     function switchToEarth(planetMesh) {
         isTransitioning = true;
-        isDragging = false;
         controls.enabled = false;
-
+        
         const startPos = camera.position.clone();
         const startTime = performance.now();
-        const duration = 1500;
+        const duration = 1200;
 
         function animateZoom() {
             const now = performance.now();
             const progress = Math.min((now - startTime) / duration, 1);
-            const ease = 1 - Math.pow(1 - progress, 3); // Cuber Out Ease
+            const ease = 1 - Math.pow(1 - progress, 3);
 
             const targetPos = new THREE.Vector3();
             planetMesh.getWorldPosition(targetPos);
             
-            // カメラを地球に近づける
-            const zoomPoint = targetPos.clone().add(new THREE.Vector3(0, 5, 15));
+            const zoomPoint = targetPos.clone().add(new THREE.Vector3(0, 10, 30));
             camera.position.lerpVectors(startPos, zoomPoint, ease);
             camera.lookAt(targetPos);
 
             if (progress < 1) {
                 requestAnimationFrame(animateZoom);
             } else {
-                // 切り替え完了
                 systemGroup.visible = false;
                 earthDetailGroup.visible = true;
                 currentMode = 'EARTH';
                 isTransitioning = false;
                 controls.enabled = true;
                 controls.minDistance = 3.5;
-                controls.maxDistance = 10;
-                camera.position.set(0, 0, 7);
+                controls.maxDistance = 15;
+                camera.position.set(0, 0, 8);
                 document.getElementById('ui-layer').style.opacity = '0';
                 document.getElementById('backBtn').style.display = 'block';
             }
@@ -213,68 +184,32 @@
         animateZoom();
     }
 
-    // モード切替: 太陽系へ
     document.getElementById('backBtn').onclick = () => {
         earthDetailGroup.visible = false;
         systemGroup.visible = true;
         currentMode = 'SYSTEM';
         controls.minDistance = 50;
         controls.maxDistance = 2000;
-        camera.position.set(0, 500, 1000);
+        camera.position.set(0, 400, 600);
         document.getElementById('ui-layer').style.opacity = '1';
         document.getElementById('backBtn').style.display = 'none';
+        controls.enabled = true;
     };
 
-    // マウス/タッチイベント
-    window.addEventListener('pointerdown', (e) => {
-        if (isTransitioning || currentMode === 'EARTH') return;
-        mouse.x = (e.clientX / window.innerWidth) * 2 - 1;
-        mouse.y = -(e.clientY / window.innerHeight) * 2 + 1;
-        raycaster.setFromCamera(mouse, camera);
-        const hits = raycaster.intersectObjects(planets.map(p => p.mesh));
-        if (hits.length > 0) {
-            isDragging = true;
-            controls.enabled = false;
-        }
-    });
-
-    window.addEventListener('pointerup', (e) => {
-        if (isTransitioning || currentMode === 'EARTH') return;
-        if (!isDragging) {
-            // クリック判定
-            mouse.x = (e.clientX / window.innerWidth) * 2 - 1;
-            mouse.y = -(e.clientY / window.innerHeight) * 2 + 1;
-            raycaster.setFromCamera(mouse, camera);
-            const hits = raycaster.intersectObjects(planets.map(p => p.mesh));
-            if (hits.length > 0 && hits[0].object.userData.name === "地球") {
-                switchToEarth(hits[0].object);
-            }
-        }
-        isDragging = false;
-        controls.enabled = true;
-    });
-
-    window.addEventListener('pointermove', (e) => {
-        if (!isDragging || currentMode === 'EARTH') return;
-        // 簡易的な時間操作（ドラッグ量に応じて時間を進める）
-        virtualTime += e.movementX * 0.01;
-    });
-
     // --- ループ ---
+    let virtualTime = 0;
     function animate() {
         requestAnimationFrame(animate);
-
         if (currentMode === 'SYSTEM') {
-            if (!isDragging && !isTransitioning) virtualTime += 0.005;
+            virtualTime += 0.005;
             planets.forEach(p => {
                 p.group.rotation.y = -virtualTime / p.data.speed;
                 p.mesh.rotation.y += 0.01;
             });
             sun.rotation.y += 0.002;
         } else {
-            detailEarth.rotation.y += 0.0015;
+            detailEarth.rotation.y += 0.002;
         }
-
         controls.update();
         renderer.render(scene, camera);
     }
