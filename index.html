@@ -1,99 +1,98 @@
 <!DOCTYPE html>
 <html lang="ja">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>20代向け体験型施設おすすめ10選</title>
-  <link rel="stylesheet" href="style.css">
-  <link rel="icon" type="image/png" href="image/kame.png" sizes="32x32">
+    <meta charset="UTF-8">
+    <title>Solar System Animation</title>
+    <style>
+        body {
+            margin: 0;
+            background-color: #000; /* 背景は黒 */
+            overflow: hidden;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+        }
+        canvas {
+            display: block;
+        }
+    </style>
 </head>
 <body>
-  <header>
-    <h1>【東京で非日常を楽しむ】20代におすすめの体験型施設10選</h1>
-  </header>
 
-  <section class="intro">
-    <p>日常をちょっと離れて、東京で「体験」できるおすすめスポットを厳選！友達・恋人・一人でも楽しめる施設を紹介します。</p>
-  </section>
+<canvas id="solarCanvas"></canvas>
 
-  <section class="facility-list">
-    <div class="facility">
-      <h2>🥷 Brave Point 台場店｜室内サバゲーでスリル満点！</h2>
-      <p><strong>内容：</strong>初心者でも安心して楽しめる室内サバイバルゲーム施設。</p>
-      <p><strong>場所：</strong>港区台場</p>
-      <p><strong>料金：</strong>2,000円〜</p>
-    </div>
+<script>
+    const canvas = document.getElementById('solarCanvas');
+    const ctx = canvas.getContext('2d');
 
-    <div class="facility">
-      <h2>🎨 Artbar Daikanyama｜ワイン片手にアート体験</h2>
-      <p><strong>内容：</strong>ワインとおつまみを楽しみながら絵を描けるリラックス空間。</p>
-      <p><strong>場所：</strong>渋谷区代官山</p>
-      <p><strong>料金：</strong>4,500円〜</p>
-    </div>
+    // キャンバスサイズを画面いっぱいに設定
+    function resize() {
+        canvas.width = window.innerWidth;
+        canvas.height = window.innerHeight;
+    }
+    window.addEventListener('resize', resize);
+    resize();
 
-    <div class="facility">
-      <h2>🍺 サントリー〈天然水のビール工場〉東京・武蔵野</h2>
-      <p><strong>内容：</strong>製造工程見学＋試飲付きの人気ツアー。</p>
-      <p><strong>場所：</strong>府中市</p>
-      <p><strong>料金：</strong>無料</p>
-    </div>
+    // 惑星のデータ設定
+    // 1分(60秒)で1周する地球を基準(period: 1.0)とする
+    const planets = [
+        { name: "水星", color: "#A5A5A5", distance: 60,  radius: 4,  period: 0.24 },
+        { name: "金星", color: "#E3BB76", distance: 90,  radius: 7,  period: 0.61 },
+        { name: "地球", color: "#2271B3", distance: 130, radius: 8,  period: 1.0 }, // 1.0 = 60秒
+        { name: "火星", color: "#E27B58", distance: 170, radius: 6,  period: 1.88 },
+        { name: "木星", color: "#D39C7E", distance: 230, radius: 15, period: 11.86 },
+        { name: "土星", color: "#C5AB6E", distance: 290, radius: 12, period: 29.46 },
+        { name: "天王星", color: "#BBE1E4", distance: 340, radius: 9,  period: 84.01 },
+        { name: "海王星", color: "#6081FF", distance: 380, radius: 9,  period: 164.8 }
+    ];
 
-    <div class="facility">
-      <h2>🧘‍♀️ ヨガスタジオ TOKYO SUN｜心と体を整える</h2>
-      <p><strong>内容：</strong>初心者歓迎のリラックスヨガ体験。</p>
-      <p><strong>場所：</strong>新宿区</p>
-      <p><strong>料金：</strong>3,000円〜</p>
-    </div>
+    function animate() {
+        // 描画をクリア
+        ctx.fillStyle = 'black';
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-    <div class="facility">
-      <h2>🎮 RED° TOKYO TOWER｜最新VR＆eスポーツ体験</h2>
-      <p><strong>内容：</strong>東京タワー内の次世代エンタメ空間。</p>
-      <p><strong>場所：</strong>港区芝公園</p>
-      <p><strong>料金：</strong>2,500円〜</p>
-    </div>
+        const centerX = canvas.width / 2;
+        const centerY = canvas.height / 2;
+        const currentTime = Date.now() / 1000; // 秒単位の現在時刻
 
-    <div class="facility">
-      <h2>🍵 茶道体験 和心庵｜日本文化を五感で味わう</h2>
-      <p><strong>内容：</strong>茶道の所作を学びながら抹茶と和菓子を堪能。</p>
-      <p><strong>場所：</strong>文京区</p>
-      <p><strong>料金：</strong>3,500円〜</p>
-    </div>
+        // 1. 太陽の描画
+        ctx.beginPath();
+        ctx.arc(centerX, centerY, 25, 0, Math.PI * 2);
+        ctx.fillStyle = "#FFCC00";
+        ctx.shadowBlur = 20;
+        ctx.shadowColor = "#FFCC00";
+        ctx.fill();
+        ctx.shadowBlur = 0; // 他の描画に影響させない
 
-    <div class="facility">
-      <h2>🧪 科学技術館｜大人も夢中になる実験体験</h2>
-      <p><strong>内容：</strong>体験型展示で科学を楽しく学べる。</p>
-      <p><strong>場所：</strong>千代田区北の丸公園</p>
-      <p><strong>料金：</strong>800円</p>
-    </div>
+        planets.forEach(planet => {
+            // 2. 軌道の線を描画
+            ctx.beginPath();
+            ctx.arc(centerX, centerY, planet.distance, 0, Math.PI * 2);
+            ctx.strokeStyle = "rgba(255, 255, 255, 0.2)";
+            ctx.lineWidth = 1;
+            ctx.stroke();
 
-    <div class="facility">
-      <h2>🎭 劇団四季｜感動の舞台を間近で体験</h2>
-      <p><strong>内容：</strong>本格的なミュージカルを鑑賞できる。</p>
-      <p><strong>場所：</strong>品川区</p>
-      <p><strong>料金：</strong>6,000円〜</p>
-    </div>
+            // 3. 惑星の位置計算
+            // 地球(period: 1)が60秒で1周(2π)するように計算
+            // 角度 = (現在の秒数 / (60 * 周期)) * 2π
+            const speedFactor = 60; 
+            const angle = (currentTime / (speedFactor * planet.period)) * Math.PI * 2;
+            
+            const x = centerX + Math.cos(angle) * planet.distance;
+            const y = centerY + Math.sin(angle) * planet.distance;
 
-    <div class="facility">
-      <h2>🚲 TOKYO BIKE TOUR｜街を巡るアクティブ体験</h2>
-      <p><strong>内容：</strong>ガイド付きで東京の魅力を発見。</p>
-      <p><strong>場所：</strong>台東区</p>
-      <p><strong>料金：</strong>5,000円〜</p>
-    </div>
+            // 4. 惑星の描画
+            ctx.beginPath();
+            ctx.arc(x, y, planet.radius, 0, Math.PI * 2);
+            ctx.fillStyle = planet.color;
+            ctx.fill();
+        });
 
-    <div class="facility">
-      <h2>🧩 東京ミステリーサーカス｜謎解きで脳トレ</h2>
-      <p><strong>内容：</strong>リアル脱出ゲームで非日常を体験。</p>
-      <p><strong>場所：</strong>新宿区</p>
-      <p><strong>料金：</strong>2,200円〜</p>
-    </div>
-  </section>
+        requestAnimationFrame(animate);
+    }
 
-  <footer>
-    <h2>📝 まとめ</h2>
-    <p>東京には、五感を刺激する体験型施設が盛りだくさん！気になるスポットを見つけたら、ぜひ予約して非日常を楽しんでみてください。</p>
-  </footer>
-  <p><a href="https://px.a8.net/svt/ejp?a8mat=45FVTX+3B2PRM+3J30+61JSH" rel="nofollow">
-  <img border="0" width="120" height="60" alt="" src="https://www26.a8.net/svt/bgt?aid=251003877200&wid=001&eno=01&mid=s00000016470001015000&mc=1"></a>
-  <img border="0" width="1" height="1" src="https://www10.a8.net/0.gif?a8mat=45FVTX+3B2PRM+3J30+61JSH" alt=""></a></p>
+    animate();
+</script>
 </body>
 </html>
