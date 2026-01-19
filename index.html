@@ -3,17 +3,17 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>3D Solar System & Deep Earth</title>
+    <title>Interstellar Explorer</title>
     <style>
         body { margin: 0; background-color: #000; overflow: hidden; font-family: sans-serif; touch-action: none; color: white; }
         canvas { display: block; }
         #ui-layer {
             position: absolute; top: 20px; width: 100%; text-align: center; pointer-events: none; transition: opacity 0.5s;
         }
-        #ui-layer h1 { font-size: 24px; margin: 0; letter-spacing: 2px; text-shadow: 0 0 10px rgba(255,200,100,0.8); }
+        #ui-layer h1 { font-size: 24px; margin: 0; letter-spacing: 2px; text-shadow: 0 0 10px rgba(0,150,255,0.8); }
         .back-btn {
             position: absolute; bottom: 30px; left: 50%; transform: translateX(-50%);
-            padding: 12px 24px; background: rgba(0,0,0,0.6); border: 2px solid #4488ff;
+            padding: 12px 24px; background: rgba(0,0,0,0.8); border: 2px solid #4488ff;
             color: white; border-radius: 30px; cursor: pointer; display: none; backdrop-filter: blur(5px);
             font-weight: bold; z-index: 100; pointer-events: auto;
         }
@@ -22,8 +22,8 @@
 <body>
 
 <div id="ui-layer">
-    <h1>SOLAR SYSTEM</h1>
-    <p style="font-size: 12px; opacity: 0.8;">地球をタップしてズームイン</p>
+    <h1 id="planet-name">SOLAR SYSTEM</h1>
+    <p id="instruction" style="font-size: 12px; opacity: 0.8;">惑星をタップしてズーム</p>
 </div>
 <button class="back-btn" id="backBtn">太陽系へ戻る</button>
 
@@ -53,11 +53,12 @@
     let currentMode = 'SYSTEM';
     let isTransitioning = false;
     let virtualTime = 0;
+    let selectedPlanet = null;
 
-    // --- 1. 背景（星空） ---
+    // --- 1. 共通背景 ---
     const starVertices = [];
     for (let i = 0; i < 4000; i++) {
-        starVertices.push((Math.random() - 0.5) * 3000, (Math.random() - 0.5) * 3000, (Math.random() - 0.5) * 3000);
+        starVertices.push((Math.random() - 0.5) * 3500, (Math.random() - 0.5) * 3500, (Math.random() - 0.5) * 3500);
     }
     const starGeo = new THREE.BufferGeometry();
     starGeo.setAttribute('position', new THREE.Float32BufferAttribute(starVertices, 3));
@@ -80,7 +81,7 @@
     const planetConfigs = [
         { name: "水星", dist: 70,  size: 5,  speed: 0.24, tex: 'mercurymap.jpg' },
         { name: "金星", dist: 110, size: 9,  speed: 0.61, tex: 'venusmap.jpg' },
-        { name: "地球", dist: 160, size: 10, speed: 1.0,  tex: 'earth_atmos_2048.jpg' },
+        { name: "地球", dist: 160, size: 10, speed: 1.0,  tex: 'earth_atmos_2048.jpg', hasAtmos: true },
         { name: "火星", dist: 210, size: 7,  speed: 1.88, tex: 'mars_1k_color.jpg' },
         { name: "木星", dist: 310, size: 22, speed: 11.86, tex: 'jupitermap.jpg' },
         { name: "土星", dist: 420, size: 18, speed: 29.46, tex: 'saturnmap.jpg' },
@@ -96,55 +97,46 @@
             new THREE.MeshStandardMaterial({ map: textureLoader.load(tBase + data.tex) })
         );
         mesh.position.x = data.dist;
-        mesh.userData = { name: data.name, speed: data.speed };
+        mesh.userData = { ...data };
         orbitGroup.add(mesh);
         systemGroup.add(orbitGroup);
         planets.push({ mesh, group: orbitGroup, data });
 
-        const ring = new THREE.Mesh(
+        const orbitLine = new THREE.Mesh(
             new THREE.RingGeometry(data.dist - 0.5, data.dist + 0.5, 128),
-            new THREE.MeshBasicMaterial({ color: 0xffffff, opacity: 0.15, transparent: true, side: THREE.DoubleSide })
+            new THREE.MeshBasicMaterial({ color: 0xffffff, opacity: 0.1, transparent: true, side: THREE.DoubleSide })
         );
-        ring.rotation.x = Math.PI/2;
-        systemGroup.add(ring);
+        orbitLine.rotation.x = Math.PI/2;
+        systemGroup.add(orbitLine);
     });
 
-    // --- 3. 詳細地球グループ ---
-    const earthDetailGroup = new THREE.Group();
-    earthDetailGroup.visible = false;
-    scene.add(earthDetailGroup);
+    // --- 3. 詳細表示用のクローン惑星 ---
+    const detailGroup = new THREE.Group();
+    detailGroup.visible = false;
+    scene.add(detailGroup);
 
-    const detailEarth = new THREE.Mesh(
-        new THREE.SphereGeometry(2, 64, 64),
-        new THREE.MeshPhongMaterial({ 
-            map: textureLoader.load('https://raw.githubusercontent.com/mrdoob/three.js/master/examples/textures/planets/earth_atmos_2048.jpg'),
-            shininess: 10 
-        })
-    );
-    earthDetailGroup.add(detailEarth);
+    const detailMesh = new THREE.Mesh(new THREE.SphereGeometry(2, 64, 64), new THREE.MeshPhongMaterial({ shininess: 15 }));
+    detailGroup.add(detailMesh);
     
     const atmosphere = new THREE.Mesh(
         new THREE.SphereGeometry(2.05, 64, 64),
         new THREE.MeshBasicMaterial({ color: 0x4488ff, transparent: true, opacity: 0.2, side: THREE.BackSide })
     );
-    earthDetailGroup.add(atmosphere);
+    detailGroup.add(atmosphere);
 
     const detailLight = new THREE.DirectionalLight(0xffffff, 2.5);
     detailLight.position.set(5, 3, 5);
-    earthDetailGroup.add(detailLight);
+    detailGroup.add(detailLight);
 
     // --- コントロール ---
     const controls = new OrbitControls(camera, renderer.domElement);
     controls.enableDamping = true;
-    camera.position.set(0, 450, 700);
+    camera.position.set(0, 500, 800);
 
-    // --- ズームロジック ---
-    let touchStartTime = 0;
-    const raycaster = new THREE.Raycaster();
-    const mouse = new THREE.Vector2();
-
-    function switchToEarth(targetMesh) {
+    // --- ズーム演出 ---
+    function zoomToPlanet(targetPlanet) {
         isTransitioning = true;
+        selectedPlanet = targetPlanet;
         controls.enabled = false;
         const startPos = camera.position.clone();
         const duration = 1500;
@@ -155,38 +147,51 @@
             const progress = Math.min((now - startTime) / duration, 1);
             const ease = 1 - Math.pow(1 - progress, 4);
 
-            // 地球の「今」の世界座標を取得
-            const targetPos = new THREE.Vector3();
-            targetMesh.getWorldPosition(targetPos);
+            // 【重要】動いている惑星の世界座標をリアルタイム取得
+            const planetWorldPos = new THREE.Vector3();
+            targetPlanet.mesh.getWorldPosition(planetWorldPos);
             
-            // 地球の斜め上にカメラを配置するよう補完
-            const offset = new THREE.Vector3(0, 10, 25);
-            const destination = targetPos.clone().add(offset);
+            // カメラを惑星の近くへ移動
+            const offset = new THREE.Vector3(0, targetPlanet.data.size * 0.5, targetPlanet.data.size * 2.5);
+            const cameraDest = planetWorldPos.clone().add(offset);
             
-            camera.position.lerpVectors(startPos, destination, ease);
-            camera.lookAt(targetPos);
+            camera.position.lerpVectors(startPos, cameraDest, ease);
+            controls.target.copy(planetWorldPos); // カメラの視点を惑星に固定
+            camera.lookAt(planetWorldPos);
 
             if (progress < 1) {
                 requestAnimationFrame(animateZoom);
             } else {
-                // 完全に地球モードに移行
+                // 詳細モード切替
                 systemGroup.visible = false;
-                earthDetailGroup.visible = true;
-                currentMode = 'EARTH';
+                detailGroup.visible = true;
+                
+                // 詳細メッシュにテクスチャをコピー
+                detailMesh.material.map = targetPlanet.mesh.material.map;
+                detailMesh.material.needsUpdate = true;
+                atmosphere.visible = !!targetPlanet.data.hasAtmos; // 地球の場合のみ大気を表示
+
+                currentMode = 'DETAIL';
                 isTransitioning = false;
                 controls.enabled = true;
                 controls.minDistance = 3.5;
                 controls.maxDistance = 15;
-                camera.position.set(0, 0, 8); // 詳細地球の正面へ
-                controls.target.set(0, 0, 0); // 回転の中心を詳細地球へ
-                document.getElementById('ui-layer').style.opacity = '0';
+                controls.target.set(0, 0, 0);
+                camera.position.set(0, 0, 7);
+                
+                document.getElementById('planet-name').innerText = targetPlanet.data.name;
+                document.getElementById('instruction').style.opacity = '0';
                 document.getElementById('backBtn').style.display = 'block';
             }
         }
         animateZoom();
     }
 
-    // --- イベントリスナー ---
+    // --- 入力イベント ---
+    let touchStartTime = 0;
+    const raycaster = new THREE.Raycaster();
+    const mouse = new THREE.Vector2();
+
     renderer.domElement.addEventListener('pointerdown', () => touchStartTime = performance.now());
     renderer.domElement.addEventListener('pointerup', (e) => {
         if (performance.now() - touchStartTime < 250 && !isTransitioning && currentMode === 'SYSTEM') {
@@ -194,21 +199,23 @@
             mouse.y = -(e.clientY / window.innerHeight) * 2 + 1;
             raycaster.setFromCamera(mouse, camera);
             const hits = raycaster.intersectObjects(planets.map(p => p.mesh));
-            if (hits.length > 0 && hits[0].object.userData.name === "地球") {
-                switchToEarth(hits[0].object);
+            if (hits.length > 0) {
+                const target = planets.find(p => p.mesh === hits[0].object);
+                zoomToPlanet(target);
             }
         }
     });
 
     document.getElementById('backBtn').onclick = () => {
-        earthDetailGroup.visible = false;
+        detailGroup.visible = false;
         systemGroup.visible = true;
         currentMode = 'SYSTEM';
         controls.minDistance = 10;
         controls.maxDistance = 2000;
         controls.target.set(0, 0, 0);
-        camera.position.set(0, 450, 700);
-        document.getElementById('ui-layer').style.opacity = '1';
+        camera.position.set(0, 500, 800);
+        document.getElementById('planet-name').innerText = "SOLAR SYSTEM";
+        document.getElementById('instruction').style.opacity = '1';
         document.getElementById('backBtn').style.display = 'none';
     };
 
@@ -222,7 +229,7 @@
             });
             sun.rotation.y += 0.002;
         } else {
-            detailEarth.rotation.y += 0.002;
+            detailMesh.rotation.y += 0.002;
         }
         controls.update();
         renderer.render(scene, camera);
