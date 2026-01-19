@@ -1,0 +1,224 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>Dynamic 3D Solar System</title>
+    <style>
+        body { margin: 0; background-color: #050510; overflow: hidden; font-family: 'Segoe UI', sans-serif; touch-action: none; color: white; }
+        canvas { display: block; }
+        #top-ui {
+            position: absolute;
+            top: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            text-align: center;
+            pointer-events: none;
+        }
+        #top-ui h1 {
+            font-size: 32px;
+            font-weight: bold;
+            margin: 0;
+            letter-spacing: 4px;
+            text-shadow: 0 0 20px rgba(255,200,100,0.8);
+        }
+        .info-panel {
+            position: absolute;
+            bottom: 20px;
+            right: 20px;
+            background: rgba(255, 255, 255, 0.1);
+            padding: 10px 15px;
+            border-radius: 10px;
+            backdrop-filter: blur(10px);
+            font-size: 12px;
+            pointer-events: none;
+            border: 1px solid rgba(255,255,255,0.2);
+        }
+    </style>
+</head>
+<body>
+
+<div id="top-ui">
+    <h1>SOLAR SYSTEM</h1>
+    <p style="font-size: 14px; opacity: 0.8;">惑星を掴んで回すと時間を操作できます</p>
+</div>
+
+<div class="info-panel">
+    自動進行中（ドラッグで干渉可能）
+</div>
+
+<script type="importmap">
+    {
+        "imports": {
+            "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+            "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
+        }
+    }
+</script>
+
+<script type="module">
+    import * as THREE from 'three';
+    import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+
+    const scene = new THREE.Scene();
+    // 背景色を少し明るい宇宙色に設定
+    scene.background = new THREE.Color(0x0a0a1a);
+
+    const camera = new THREE.PerspectiveCamera(50, window.innerWidth / window.innerHeight, 0.1, 5000);
+    const renderer = new THREE.WebGLRenderer({ antialias: true });
+    renderer.setSize(window.innerWidth, window.innerHeight);
+    renderer.setPixelRatio(window.devicePixelRatio);
+    document.body.appendChild(renderer.domElement);
+
+    const textureLoader = new THREE.TextureLoader();
+    const tBase = "https://threejs.org/examples/textures/planets/";
+
+    // --- 光源 ---
+    const sunLight = new THREE.PointLight(0xffffff, 5000, 2000);
+    scene.add(sunLight);
+    // 環境光を強くして惑星の影側も見やすくする
+    const ambientLight = new THREE.AmbientLight(0xffffff, 0.5);
+    scene.add(ambientLight);
+
+    // --- 惑星データ（見やすさ優先のサイズ設定） ---
+    const planetConfigs = [
+        { name: "水星", dist: 70,  size: 5,  speed: 0.24, tex: 'mercurymap.jpg', color: 0xaaaaaa },
+        { name: "金星", dist: 110, size: 9,  speed: 0.61, tex: 'venusmap.jpg',   color: 0xe3bb76 },
+        { name: "地球", dist: 160, size: 10, speed: 1.0,  tex: 'earth_atmos_2048.jpg', color: 0x2271b3 },
+        { name: "火星", dist: 210, size: 7,  speed: 1.88, tex: 'mars_1k_color.jpg', color: 0xe27b58 },
+        { name: "木星", dist: 310, size: 22, speed: 11.86, tex: 'jupitermap.jpg', color: 0xd39c7e },
+        { name: "土星", dist: 420, size: 18, speed: 29.46, tex: 'saturnmap.jpg', color: 0xc5ab6e, hasRing: true },
+        { name: "天王星", dist: 510, size: 13, speed: 84.0, tex: 'uranusmap.jpg', color: 0xbbe1e4 },
+        { name: "海王星", dist: 590, size: 12, speed: 164.8, tex: 'neptunemap.jpg', color: 0x6081ff }
+    ];
+
+    // 太陽
+    const sunGeo = new THREE.SphereGeometry(35, 64, 64);
+    const sunMat = new THREE.MeshStandardMaterial({ 
+        emissive: 0xff6600, emissiveIntensity: 2, 
+        map: textureLoader.load('https://threejs.org/examples/textures/lava/lavatile.jpg') 
+    });
+    const sun = new THREE.Mesh(sunGeo, sunMat);
+    scene.add(sun);
+
+    const planets = [];
+    planetConfigs.forEach(data => {
+        const group = new THREE.Group();
+        
+        const mat = new THREE.MeshStandardMaterial({
+            map: textureLoader.load(tBase + data.tex, undefined, undefined, (err) => {
+                mat.color.set(data.color); // テクスチャ失敗時のフォールバック
+            }),
+            roughness: 0.5,
+            metalness: 0.2
+        });
+
+        const mesh = new THREE.Mesh(new THREE.SphereGeometry(data.size, 64, 64), mat);
+        mesh.position.x = data.dist;
+        mesh.userData = { name: data.name, dist: data.dist, speed: data.speed };
+
+        if (data.hasRing) {
+            const ringGeo = new THREE.RingGeometry(data.size * 1.3, data.size * 2.2, 64);
+            const ringMat = new THREE.MeshStandardMaterial({ 
+                color: 0x999999, side: THREE.DoubleSide, transparent: true, opacity: 0.6 
+            });
+            const ring = new THREE.Mesh(ringGeo, ringMat);
+            ring.rotation.x = Math.PI / 2.2;
+            mesh.add(ring);
+        }
+
+        group.add(mesh);
+        scene.add(group);
+        planets.push({ mesh, group, data });
+
+        // 軌道
+        const orbit = new THREE.Mesh(
+            new THREE.RingGeometry(data.dist - 0.5, data.dist + 0.5, 128),
+            new THREE.MeshBasicMaterial({ color: 0x444466, transparent: true, opacity: 0.3, side: THREE.DoubleSide })
+        );
+        orbit.rotation.x = Math.PI / 2;
+        scene.add(orbit);
+    });
+
+    camera.position.set(0, 500, 1000);
+    const controls = new OrbitControls(camera, renderer.domElement);
+    controls.enableDamping = true;
+
+    // --- ドラッグ & 連動ロジック ---
+    let virtualTime = 0;
+    let isDragging = false;
+    let lastAngle = 0;
+    let draggedPlanet = null;
+    const raycaster = new THREE.Raycaster();
+    const mouse = new THREE.Vector2();
+
+    function getMouseAngle(x, y) {
+        mouse.x = (x / window.innerWidth) * 2 - 1;
+        mouse.y = -(y / window.innerHeight) * 2 + 1;
+        raycaster.setFromCamera(mouse, camera);
+        const plane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
+        const intersect = new THREE.Vector3();
+        if (raycaster.ray.intersectPlane(plane, intersect)) {
+            return Math.atan2(intersect.z, intersect.x);
+        }
+        return lastAngle;
+    }
+
+    window.addEventListener('pointerdown', (e) => {
+        mouse.x = (e.clientX / window.innerWidth) * 2 - 1;
+        mouse.y = -(e.clientY / window.innerHeight) * 2 + 1;
+        raycaster.setFromCamera(mouse, camera);
+        const hits = raycaster.intersectObjects(planets.map(p => p.mesh));
+        if (hits.length > 0) {
+            isDragging = true;
+            draggedPlanet = hits[0].object;
+            lastAngle = getMouseAngle(e.clientX, e.clientY);
+            controls.enabled = false;
+        }
+    });
+
+    window.addEventListener('pointermove', (e) => {
+        if (!isDragging) return;
+        const currentAngle = getMouseAngle(e.clientX, e.clientY);
+        let diff = currentAngle - lastAngle;
+        if (diff > Math.PI) diff -= Math.PI * 2;
+        if (diff < -Math.PI) diff += Math.PI * 2;
+        
+        virtualTime += diff * draggedPlanet.userData.speed * 1.5;
+        lastAngle = currentAngle;
+    });
+
+    window.addEventListener('pointerup', () => {
+        isDragging = false;
+        controls.enabled = true;
+    });
+
+    // --- ループ ---
+    function animate() {
+        requestAnimationFrame(animate);
+
+        // ドラッグしていない時は自動で時間を進める
+        if (!isDragging) {
+            virtualTime += 0.005; 
+        }
+
+        planets.forEach(p => {
+            p.group.rotation.y = -virtualTime / p.data.speed;
+            p.mesh.rotation.y += 0.01; // 自転
+        });
+
+        sun.rotation.y += 0.002;
+        controls.update();
+        renderer.render(scene, camera);
+    }
+
+    window.addEventListener('resize', () => {
+        camera.aspect = window.innerWidth / window.innerHeight;
+        camera.updateProjectionMatrix();
+        renderer.setSize(window.innerWidth, window.innerHeight);
+    });
+
+    animate();
+</script>
+</body>
+</html>
