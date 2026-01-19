@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Mobile Friendly Globe</title>
+    <title>Realistic Space Globe</title>
     <style>
         body { margin: 0; background-color: #000; overflow: hidden; touch-action: none; }
         canvas { display: block; }
@@ -28,59 +28,25 @@
         const camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 1000);
         const renderer = new THREE.WebGLRenderer({ antialias: true });
         
-        renderer.setPixelRatio(window.devicePixelRatio); // 解像度調整
+        renderer.setPixelRatio(window.devicePixelRatio);
         renderer.setSize(window.innerWidth, window.innerHeight);
         document.body.appendChild(renderer.domElement);
+
+        // 1. 星空背景の追加
+        const cubeTextureLoader = new THREE.CubeTextureLoader();
+        // NASAのオープンデータなどにある星空のキューブマップテクスチャを使用
+        const spaceTexture = cubeTextureLoader.load([
+            'https://threejs.org/examples/textures/cube/Bridge2/posx.jpg', // right
+            'https://threejs.org/examples/textures/cube/Bridge2/negx.jpg', // left
+            'https://threejs.org/examples/textures/cube/Bridge2/posy.jpg', // top
+            'https://threejs.org/examples/textures/cube/Bridge2/negy.jpg', // bottom
+            'https://threejs.org/examples/textures/cube/Bridge2/posz.jpg', // front
+            'https://threejs.org/examples/textures/cube/Bridge2/negz.jpg'  // back
+        ]);
+        scene.background = spaceTexture;
 
         // 地球のサイズ調整（画面が小さければ半径を小さくする）
         const getGlobeRadius = () => window.innerWidth < 600 ? 1.5 : 2;
         let geometry = new THREE.SphereGeometry(getGlobeRadius(), 64, 64);
         
-        const textureLoader = new THREE.TextureLoader();
-        const earthTexture = textureLoader.load('https://unpkg.com/threejs-sandbox@1.0.3/assets/textures/planets/earth_atmos_2048.jpg');
-        
-        const material = new THREE.MeshPhongMaterial({ map: earthTexture, shininess: 5 });
-        const earth = new THREE.Mesh(geometry, material);
-        scene.add(earth);
-
-        // ライティング
-        const ambientLight = new THREE.AmbientLight(0xffffff, 0.8);
-        scene.add(ambientLight);
-        const sunLight = new THREE.DirectionalLight(0xffffff, 1.5);
-        sunLight.position.set(5, 3, 5);
-        scene.add(sunLight);
-
-        // モバイル向けコントロール設定
-        const controls = new OrbitControls(camera, renderer.domElement);
-        controls.enableDamping = true; // 慣性をつけて滑らかに
-        controls.dampingFactor = 0.05;
-        controls.rotateSpeed = 0.8;    // 回転速度の調整
-        controls.enableZoom = false;   // 画面をスクロールしたい場合に邪魔にならないようズーム無効（任意）
-
-        camera.position.z = 6; // カメラを少し引いて全体が見えるように
-
-        function animate() {
-            requestAnimationFrame(animate);
-            // earth.rotation.y += 0.001; // 自動回転を少しゆっくりに
-            controls.update();
-            renderer.render(scene, camera);
-        }
-
-        // リサイズ時の地球サイズ再計算
-        window.addEventListener('resize', () => {
-            const width = window.innerWidth;
-            const height = window.innerHeight;
-            
-            camera.aspect = width / height;
-            camera.updateProjectionMatrix();
-            renderer.setSize(width, height);
-            
-            // 地球の大きさを動的に変更したい場合はジオメトリを再作成
-            earth.geometry.dispose();
-            earth.geometry = new THREE.SphereGeometry(getGlobeRadius(), 64, 64);
-        });
-
-        animate();
-    </script>
-</body>
-</html>
+        const textureLoader = new
