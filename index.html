@@ -1,0 +1,280 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Interstellar Explorer - Enhanced</title>
+    <style>
+        body { margin: 0; background-color: #000; overflow: hidden; font-family: 'Segoe UI', sans-serif; touch-action: none; color: white; }
+        canvas { display: block; }
+        #ui-layer {
+            position: absolute; top: 20px; width: 100%; text-align: center; pointer-events: none; transition: opacity 0.5s;
+        }
+        #ui-layer h1 { font-size: 28px; margin: 0; letter-spacing: 4px; text-shadow: 0 0 15px rgba(0,150,255,0.8); color: #e0f2ff; }
+        #instruction { font-size: 14px; margin-top: 8px; color: #88ccff; opacity: 0.9; }
+        .back-btn {
+            position: absolute; bottom: 40px; left: 50%; transform: translateX(-50%);
+            padding: 14px 28px; background: rgba(0,20,40,0.7); border: 1px solid #4488ff;
+            color: white; border-radius: 40px; cursor: pointer; display: none; backdrop-filter: blur(10px);
+            font-weight: bold; z-index: 100; pointer-events: auto; transition: 0.3s;
+        }
+        .back-btn:hover { background: rgba(0,80,255,0.4); box-shadow: 0 0 20px rgba(68,136,255,0.5); }
+    </style>
+</head>
+<body>
+
+<div id="ui-layer">
+    <h1 id="planet-name">SOLAR SYSTEM</h1>
+    <p id="instruction">惑星をタップして探査を開始</p>
+</div>
+<button class="back-btn" id="backBtn">太陽系へ戻る</button>
+
+<script type="importmap">
+    {
+        "imports": {
+            "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+            "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
+        }
+    }
+</script>
+
+<script type="module">
+    import * as THREE from 'three';
+    import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+
+    const scene = new THREE.Scene();
+    const camera = new THREE.PerspectiveCamera(50, window.innerWidth / window.innerHeight, 0.1, 10000);
+    const renderer = new THREE.WebGLRenderer({ antialias: true });
+    renderer.setSize(window.innerWidth, window.innerHeight);
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+    document.body.appendChild(renderer.domElement);
+
+    const textureLoader = new THREE.TextureLoader();
+    // 確実に存在する外部テクスチャURLを使用
+    const texPath = "https://raw.githubusercontent.com/mrdoob/three.js/master/examples/textures/planets/";
+    
+    let currentMode = 'SYSTEM';
+    let isTransitioning = false;
+    let virtualTime = 0;
+    let selectedPlanet = null;
+
+    // --- 背景: 星屑 ---
+    const starVertices = [];
+    for (let i = 0; i < 6000; i++) {
+        starVertices.push((Math.random() - 0.5) * 4000, (Math.random() - 0.5) * 4000, (Math.random() - 0.5) * 4000);
+    }
+    const starGeo = new THREE.BufferGeometry();
+    starGeo.setAttribute('position', new THREE.Float32BufferAttribute(starVertices, 3));
+    scene.add(new THREE.Points(starGeo, new THREE.PointsMaterial({ color: 0xaaaaaa, size: 1.2 })));
+
+    // --- 太陽系グループ ---
+    const systemGroup = new THREE.Group();
+    scene.add(systemGroup);
+    
+    const sunLight = new THREE.PointLight(0xffffff, 3, 3000, 0); // 強度を調整
+    systemGroup.add(sunLight);
+    scene.add(new THREE.AmbientLight(0xffffff, 0.3));
+
+    const sun = new THREE.Mesh(
+        new THREE.SphereGeometry(40, 64, 64),
+        new THREE.MeshBasicMaterial({ map: textureLoader.load('https://threejs.org/examples/textures/lava/lavatile.jpg') })
+    );
+    systemGroup.add(sun);
+
+    // 惑星データ設定
+    const planetConfigs = [
+        { name: "水星", dist: 80,  size: 4,  speed: 0.24, tex: 'mercurymap.jpg' },
+        { name: "金星", dist: 120, size: 8,  speed: 0.61, tex: 'venusmap.jpg' },
+        { name: "地球", dist: 170, size: 9,  speed: 1.0,  tex: 'earth_atmos_2048.jpg', hasAtmos: true },
+        { name: "火星", dist: 220, size: 6,  speed: 1.88, tex: 'mars_1k_color.jpg' },
+        { name: "木星", dist: 330, size: 20, speed: 4.86, tex: 'jupitermap.jpg' },
+        { name: "土星", dist: 450, size: 17, speed: 9.46, tex: 'saturnmap.jpg', hasRing: true },
+        { name: "天王星", dist: 550, size: 12, speed: 18.0, tex: 'uranusmap.jpg' },
+        { name: "海王星", dist: 640, size: 11, speed: 28.8, tex: 'neptunemap.jpg' }
+    ];
+
+    const planets = [];
+    planetConfigs.forEach(data => {
+        const orbitGroup = new THREE.Group();
+        const mesh = new THREE.Mesh(
+            new THREE.SphereGeometry(data.size, 64, 64),
+            new THREE.MeshStandardMaterial({ map: textureLoader.load(texPath + data.tex) })
+        );
+        mesh.position.x = data.dist;
+        mesh.userData = { ...data };
+        orbitGroup.add(mesh);
+
+        // 土星の環を追加
+        if (data.hasRing) {
+            const ringGeo = new THREE.RingGeometry(data.size * 1.4, data.size * 2.2, 64);
+            const ringMat = new THREE.MeshBasicMaterial({ 
+                color: 0xaaaaaa, side: THREE.DoubleSide, transparent: true, opacity: 0.6,
+                map: textureLoader.load(texPath + 'saturnringcolor.jpg') // 代替テクスチャ
+            });
+            const ring = new THREE.Mesh(ringGeo, ringMat);
+            ring.rotation.x = Math.PI / 2.5;
+            mesh.add(ring);
+        }
+
+        systemGroup.add(orbitGroup);
+        planets.push({ mesh, group: orbitGroup, data });
+
+        // 軌道ライン
+        const orbitLine = new THREE.Mesh(
+            new THREE.RingGeometry(data.dist - 0.3, data.dist + 0.3, 128),
+            new THREE.MeshBasicMaterial({ color: 0x4488ff, opacity: 0.15, transparent: true, side: THREE.DoubleSide })
+        );
+        orbitLine.rotation.x = Math.PI/2;
+        systemGroup.add(orbitLine);
+    });
+
+    // --- 詳細表示用のセットアップ ---
+    const detailGroup = new THREE.Group();
+    detailGroup.visible = false;
+    scene.add(detailGroup);
+
+    const detailMesh = new THREE.Mesh(new THREE.SphereGeometry(3, 64, 64), new THREE.MeshStandardMaterial());
+    detailGroup.add(detailMesh);
+    
+    const atmosphere = new THREE.Mesh(
+        new THREE.SphereGeometry(3.1, 64, 64),
+        new THREE.MeshBasicMaterial({ color: 0x44aaff, transparent: true, opacity: 0.2, side: THREE.BackSide })
+    );
+    detailGroup.add(atmosphere);
+
+    const detailLight = new THREE.DirectionalLight(0xffffff, 2);
+    detailLight.position.set(5, 5, 5);
+    detailGroup.add(detailLight);
+
+    // --- コントロール ---
+    const controls = new OrbitControls(camera, renderer.domElement);
+    controls.enableDamping = true;
+    camera.position.set(0, 400, 800);
+
+    // --- ズームロジック ---
+    function zoomToPlanet(targetPlanet) {
+        if (isTransitioning) return;
+        isTransitioning = true;
+        selectedPlanet = targetPlanet;
+        
+        const startPos = camera.position.clone();
+        const duration = 1200;
+        const startTime = performance.now();
+
+        function animateZoom() {
+            const now = performance.now();
+            const progress = Math.min((now - startTime) / duration, 1);
+            const ease = 1 - Math.pow(1 - progress, 3);
+
+            const planetPos = new THREE.Vector3();
+            targetPlanet.mesh.getWorldPosition(planetPos);
+            
+            const offset = new THREE.Vector3(0, targetPlanet.data.size * 1, targetPlanet.data.size * 4);
+            camera.position.lerpVectors(startPos, planetPos.clone().add(offset), ease);
+            controls.target.lerp(planetPos, ease);
+            camera.lookAt(planetPos);
+
+            if (progress < 1) {
+                requestAnimationFrame(animateZoom);
+            } else {
+                switchToDetail(targetPlanet);
+            }
+        }
+        animateZoom();
+    }
+
+    function switchToDetail(planet) {
+        systemGroup.visible = false;
+        detailGroup.visible = true;
+        
+        detailMesh.material.map = planet.mesh.material.map;
+        detailMesh.material.needsUpdate = true;
+        
+        // 土星の場合のみリングを詳細表示にも追加
+        const existingRing = detailMesh.getObjectByName("detailRing");
+        if (existingRing) detailMesh.remove(existingRing);
+        
+        if (planet.data.hasRing) {
+            const ring = planet.mesh.children[0].clone();
+            ring.name = "detailRing";
+            ring.scale.set(0.3, 0.3, 0.3); // 詳細モードのスケールに合わせる
+            detailMesh.add(ring);
+        }
+
+        atmosphere.visible = !!planet.data.hasAtmos;
+        currentMode = 'DETAIL';
+        isTransitioning = false;
+        
+        controls.minDistance = 5;
+        controls.maxDistance = 50;
+        controls.target.set(0, 0, 0);
+        camera.position.set(0, 2, 10);
+        
+        document.getElementById('planet-name').innerText = planet.data.name;
+        document.getElementById('instruction').style.opacity = '0';
+        document.getElementById('backBtn').style.display = 'block';
+    }
+
+    // --- イベントリスナー ---
+    const raycaster = new THREE.Raycaster();
+    const mouse = new THREE.Vector2();
+
+    window.addEventListener('click', (e) => {
+        if (currentMode !== 'SYSTEM' || isTransitioning) return;
+        
+        mouse.x = (e.clientX / window.innerWidth) * 2 - 1;
+        mouse.y = -(e.clientY / window.innerHeight) * 2 + 1;
+        
+        raycaster.setFromCamera(mouse, camera);
+        const intersects = raycaster.intersectObjects(planets.map(p => p.mesh));
+        
+        if (intersects.length > 0) {
+            const target = planets.find(p => p.mesh === intersects[0].object);
+            zoomToPlanet(target);
+        }
+    });
+
+    document.getElementById('backBtn').onclick = () => {
+        detailGroup.visible = false;
+        systemGroup.visible = true;
+        currentMode = 'SYSTEM';
+        controls.minDistance = 10;
+        controls.maxDistance = 2000;
+        controls.target.set(0, 0, 0);
+        camera.position.set(0, 400, 800);
+        document.getElementById('planet-name').innerText = "SOLAR SYSTEM";
+        document.getElementById('instruction').style.opacity = '1';
+        document.getElementById('backBtn').style.display = 'none';
+    };
+
+    function animate() {
+        requestAnimationFrame(animate);
+        const delta = 0.005;
+        
+        if (currentMode === 'SYSTEM') {
+            virtualTime += delta;
+            planets.forEach(p => {
+                // 公転
+                p.group.rotation.y = virtualTime * (1 / p.data.speed) * 0.5;
+                // 自転
+                p.mesh.rotation.y += 0.01;
+            });
+            sun.rotation.y += 0.002;
+        } else {
+            detailMesh.rotation.y += 0.005;
+        }
+        
+        controls.update();
+        renderer.render(scene, camera);
+    }
+
+    window.addEventListener('resize', () => {
+        camera.aspect = window.innerWidth / window.innerHeight;
+        camera.updateProjectionMatrix();
+        renderer.setSize(window.innerWidth, window.innerHeight);
+    });
+
+    animate();
+</script>
+</body>
+</html>
